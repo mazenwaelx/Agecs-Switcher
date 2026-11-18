@@ -1,0 +1,35 @@
+{
+  "activeDirs": {
+    "claude": "~/.claude",
+    "codex": "~/.codex"
+  },
+  "vaultDir": "~/.agecs-switcher/vault",
+  "transcriptsDir": "~/.claude/projects",
+  "defaultCooldownHours": 5,
+  "pollMs": 1500,
+  "providers": {
+    "claude": {
+      "cmd": "claude",
+      "credFile": ".credentials.json",
+      "identityField": "organizationUuid",
+      "continueArgs": ["--continue"],
+      "accounts": ["claude-1", "claude-2"]
+    },
+    "codex": {
+      "cmd": "codex",
+      "credFile": "auth.json",
+      "identityField": null,
+      "continueArgs": ["resume", "--last"],
+      "_note": "Codex/ChatGPT is unverified here (OpenAI Codex CLI not installed). Confirm auth.json path and resume flag before using.",
+      "accounts": ["codex-1"]
+    }
+  },
+  "limitPatterns": [
+    "5-hour limit",
+    "weekly limit",
+    "usage limit",
+    "limit reached",
+    "rate limit",
+    "exceeded your"
+  ]
+}

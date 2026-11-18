@@ -1,0 +1,13 @@
+{
+  "name": "agecs-switcher",
+  "version": "1.0.0",
+  "description": "Auto-switch between your logged-in Claude/Codex subscription accounts in VSCode when one hits its usage limit. No API key. No dependencies.",
+  "type": "module",
+  "bin": { "agecs": "agecs.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "start": "node server.mjs",
+    "agecs": "node agecs.mjs"
+  },
+  "license": "MIT"
+}

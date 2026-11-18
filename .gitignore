@@ -1,0 +1,16 @@
+# Never commit logins or tokens
+.agecs-switcher/
+vault/
+*.credentials.json
+.credentials.json
+auth.json
+*.token
+
+# Node
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db

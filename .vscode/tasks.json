@@ -1,0 +1,49 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AGECS: Run (auto-switch accounts)",
+      "detail": "Launch Claude and auto-switch accounts when a limit hits",
+      "type": "shell",
+      "command": "node",
+      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "run", "claude"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Log in an account",
+      "type": "shell",
+      "command": "node",
+      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "login", "${input:accountName}"],
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Status",
+      "type": "shell",
+      "command": "node",
+      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "status"],
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Control panel",
+      "type": "shell",
+      "command": "node",
+      "args": ["d:/AGECS/Agecs-Switcher/server.mjs"],
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Run tests",
+      "type": "shell",
+      "command": "node",
+      "args": ["--test"],
+      "options": { "cwd": "d:/AGECS/Agecs-Switcher" },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    { "id": "accountName", "type": "promptString", "description": "Account name (e.g. claude-1, claude-2)" }
+  ]
+}
