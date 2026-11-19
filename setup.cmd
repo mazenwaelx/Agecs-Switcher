@@ -35,9 +35,7 @@ echo        - VS Code setting:   "claudeCode.continueAfterReload": true
 echo        - %%USERPROFILE%%\.claude\settings.json:  "autoContinueAtUsageLimit": true
 echo        then fully quit and reopen VS Code once.
 echo.
-echo  3^) Start it:
-echo        node agecs.mjs watch     ^(sidebar panel^)   OR   node agecs.mjs run   ^(terminal^)
-echo        or double-click  AGECS.cmd  for the app window.
+echo  3^) Start it:  double-click  START.cmd  and press a number to pick a mode.
 echo ============================================
 echo.
 pause

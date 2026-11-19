@@ -22,12 +22,15 @@ You need **Node.js** (https://nodejs.org) and **Claude Code** already installed,
    node agecs.mjs login claude-2
    ```
 3. **Check:** `node agecs.mjs doctor` → should say *"2 distinct accounts — switching will work."*
-4. **Pick how you use Claude:**
-   - **Terminal** (fully automatic, keeps the conversation): `node agecs.mjs run`
-   - **Sidebar panel:** `node agecs.mjs watch` — plus set `claudeCode.continueAfterReload: true`
-     and `autoContinueAtUsageLimit: true` (see
-     [the panel section](#using-the-vs-code-claude-code-extension-sidebar-panel)), then reopen VS Code once.
-   - **App window:** double-click `AGECS.cmd`.
+4. **Start it — double-click `START.cmd`** and press a number to pick a mode:
+   - **[1] Sidebar panel** — the Claude chat panel. Needs `claudeCode.continueAfterReload: true`
+     and `autoContinueAtUsageLimit: true` set once (see
+     [the panel section](#using-the-vs-code-claude-code-extension-sidebar-panel)), then reopen VS Code.
+   - **[2] Terminal** — Claude in the terminal, fully automatic, keeps the conversation.
+   - **[3] App window** — buttons to log in / save / switch accounts.
+   - **[4] Check accounts** — runs `doctor`.
+
+   (Prefer typing? The same modes are `node agecs.mjs watch` / `run`, and `node app.mjs`.)
 
 That's it — when an account hits its limit, it switches to the other one.
 
