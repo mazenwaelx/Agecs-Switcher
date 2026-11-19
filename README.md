@@ -1,199 +1,217 @@
-# AGECS Switcher
+<div align="center">
 
-Keep working in VSCode when Claude hits its limit. You use **Claude Code normally
-in the terminal**; the moment it logs a real **5-hour or weekly usage-limit**,
-this tool silently **switches to another account you've logged in** and continues
-the same conversation. No API key — it swaps your subscription logins. No npm
-dependencies.
+# 🔄 AGECS Switcher
 
-> Status: the **Claude** path is built, verified, and unit/integration-tested.
-> The **Codex / ChatGPT** path is wired in config but unverified (the OpenAI Codex
-> CLI isn't installed here) — confirm its `auth.json` path and `resume` flag first.
+**Never stop working when Claude hits a usage limit.**
 
-## Quick start (new machine)
+Automatically switch between your Claude subscription accounts the moment one hits its
+5-hour or weekly limit — in the terminal *or* the VS Code sidebar — and keep going.
 
-You need **Node.js** (https://nodejs.org) and **Claude Code** already installed, and
-**two different Claude accounts**.
+![tests](https://img.shields.io/badge/tests-54%20passing-brightgreen)
+![dependencies](https://img.shields.io/badge/dependencies-0-blue)
+![node](https://img.shields.io/badge/node-%E2%89%A518-339933)
+![api key](https://img.shields.io/badge/API%20key-not%20required-success)
+![license](https://img.shields.io/badge/license-MIT-lightgrey)
 
-1. **Double-click `setup.cmd`** (installs the panel helper, checks your setup).
-2. **Save both accounts** — opens Claude; type `/login`, sign in, exit:
-   ```bash
-   node agecs.mjs login claude-1
-   node agecs.mjs login claude-2
-   ```
-3. **Check:** `node agecs.mjs doctor` → should say *"2 distinct accounts — switching will work."*
-4. **Start it — double-click `START.cmd`** and press a number to pick a mode:
-   - **[1] Sidebar panel** — the Claude chat panel. Needs `claudeCode.continueAfterReload: true`
-     and `autoContinueAtUsageLimit: true` set once (see
-     [the panel section](#using-the-vs-code-claude-code-extension-sidebar-panel)), then reopen VS Code.
-   - **[2] Terminal** — Claude in the terminal, fully automatic, keeps the conversation.
-   - **[3] App window** — buttons to log in / save / switch accounts.
-   - **[4] Check accounts** — runs `doctor`.
+</div>
 
-   (Prefer typing? The same modes are `node agecs.mjs watch` / `run`, and `node app.mjs`.)
+---
 
-That's it — when an account hits its limit, it switches to the other one.
+## What it does
 
-## Why it works
+You use **Claude Code** exactly as you normally do. When your active account hits a
+usage limit, AGECS Switcher detects it, **swaps your login to another account you've
+signed into**, and continues your work — no API key, no subscriptions juggling, no
+manual re-login.
 
-Claude Code stores your login as a plain file (`~/.claude/.credentials.json`) and
-logs every API error — including usage limits — to its session transcript as a
-structured `isApiErrorMessage` event. So the switcher can:
+- ✅ **Two modes** — fully automatic in the terminal, or in the VS Code sidebar panel.
+- ✅ **No API key** — it swaps your real subscription logins, not tokens you pay per-use.
+- ✅ **Zero dependencies** — pure Node.js, nothing to `npm install`.
+- ✅ **Same-org safe** — tells apart two accounts (seats) in the same team/org.
+- ✅ **Never false-switches** — keys on Claude Code's structured error flag, not the
+  word "limit" appearing in your chat.
+- ✅ **Secrets stay local** — logins live in `~/.agecs-switcher/`, never in the repo.
 
-1. keep a **vault** of each account's login snapshot,
-2. run `claude` with a normal interactive terminal,
-3. watch the transcript for a **real** limit event (the structured flag, not just
-   the words "limit" in your chat — so it never switches by mistake),
-4. on a hit: swap the active login to your next account and relaunch
-   `claude --continue` so your conversation picks up where it stopped.
+---
 
-## Setup (once per account)
+## Requirements
 
-```bash
-# 1. Log each account in (opens Claude; type /login, then exit — it auto-saves):
-node agecs.mjs login claude-1
-node agecs.mjs login claude-2        # sign in with your OTHER account
-
-# 2. Check they're saved:
-node agecs.mjs status
-```
-
-Logins are stored under `~/.agecs-switcher/vault/` — **never** in this repo (see
-`.gitignore`).
-
-Each account must be a **different Claude login**. Two seats in the **same
-org/team** count as different accounts (they share an `organizationUuid` but have
-separate usage limits) — the switcher tells them apart by the full login, not the
-org. Run `node agecs.mjs doctor` to confirm your saved accounts are distinct and
-there's something to switch to.
-
-## Daily use
-
-Instead of `claude`, run:
-
-```bash
-node agecs.mjs run
-```
-
-Use Claude exactly as normal in that terminal. When an account caps, you'll see
-`[agecs] … hit a usage limit. Switching…`, a brief relaunch, and your conversation
-continues on the next account. When all accounts are capped it waits for the
-soonest reset, then resumes.
-
-Pass Claude args through after `--`:  `node agecs.mjs run claude -- --model opus`
-
-### Commands
-
-| Command | Does |
+| | |
 |---|---|
-| `agecs run [provider] [-- args]` | launch Claude in the terminal and auto-switch on a limit |
-| `agecs watch [provider]` | for the VS Code Claude Code **panel**: swap the account on a limit |
-| `agecs login <name>` | sign a new account in and save it |
-| `agecs capture <name>` | save whoever is logged in right now as `<name>` |
-| `agecs use <name>` | switch the active account now |
-| `agecs status [provider]` | list accounts: saved / ACTIVE / capped |
-| `agecs doctor` | check accounts are saved, **distinct**, and switchable |
+| **Node.js** | v18 or newer — <https://nodejs.org> |
+| **Claude Code** | installed and working (`claude` on your PATH) |
+| **Accounts** | **two different** Claude logins (two separate subscriptions, or two seats in one team) |
+| **OS** | Windows for the one-click `.cmd` helpers; the core CLI is cross-platform |
 
-## Using the VS Code Claude Code extension (sidebar panel)
+---
 
-Two ways to use Claude in VS Code, two modes:
+## Quick start
 
-- **Integrated terminal (CLI)** → `agecs run`. Fully automatic: it owns the
-  Claude process, so on a limit it swaps *and relaunches* `--continue` itself.
-- **The extension's chat panel (GUI)** → switch, then **restart VS Code**.
-  Switching an account (`agecs use <name>`, the app's **Make active**, or `watch`
-  on a limit) swaps **both** the tokens *and* the account identity
-  (`oauthAccount` in `~/.claude.json`). But the panel loads its login into memory
-  when the session starts, so a **running** chat won't change — you must fully
-  **quit and reopen VS Code** (not just *Reload Window*, which resumes the old
-  session), then start a new chat. `/status` in the panel will then show the new
-  account.
-
-  `agecs watch` detects the limit and does the swap for you; you still restart to
-  adopt it. Run it in a side terminal and leave it going:
-
-```bash
-node agecs.mjs watch
+```text
+1. Download this repo  (Code ▸ Download ZIP, or git clone) and unzip it.
+2. Double-click  setup.cmd                      ← installs the panel helper, checks setup
+3. Save your two accounts:
+      node agecs.mjs login claude-1             ← type /login, sign in, exit
+      node agecs.mjs login claude-2             ← sign in with your OTHER account
+4. Double-click  START.cmd  and press a number  ← pick a mode
 ```
 
-Or the VSCode task **"AGECS: Watch (extension panel)"**.
+That's it. `node agecs.mjs doctor` confirms both accounts are saved and distinct.
 
-### Make the panel switch automatically (AGECS Reloader)
+---
 
-The panel caches its login in memory, so a swap alone won't move a *running* chat.
-The **AGECS Reloader** companion extension fixes that: the switcher writes a signal
-whenever it swaps accounts, and the extension reloads the window so the panel
-re-reads the new login — no manual quit. One-time setup:
+## Modes
 
-1. **Install it:** double-click **`install-reloader.cmd`** (copies `vscode-reloader/`
-   into `~/.vscode/extensions/`).
-2. **Set** `"claudeCode.continueAfterReload": true` in VS Code settings — so the
-   reloaded panel **resumes your conversation**. Combined with the switcher's
-   identity swap, the resumed chat comes back on the **new** account (the same chat,
-   now on the other login).
-3. **Fully quit and reopen VS Code once** to load the extension.
+Double-click **`START.cmd`** and press a key, or run the command directly:
 
-After that: `agecs watch` (or **Make active**) swaps the account → the window
-reloads itself (~1s flash) → **your conversation continues on the new account**.
-The extension then **pre-fills `continue`** in the panel so you just press **Enter**
-to resume the work.
+| # | Mode | Command | Switching | Keeps conversation |
+|---|------|---------|-----------|--------------------|
+| **1** | **Sidebar panel** | `node agecs.mjs watch` | auto (reloads panel) | yes¹ |
+| **2** | **Terminal** | `node agecs.mjs run` | **fully auto** | yes (`--continue`) |
+| **3** | **App window** | `node app.mjs` / `AGECS.cmd` | manual buttons | — |
+| **4** | **Check accounts** | `node agecs.mjs doctor` | — | — |
 
-**Auto-press Enter (optional, fragile):** to also send `continue` without any
-keypress, create the flag file `~/.agecs-switcher/auto-submit` (e.g.
-`echo 1 > %USERPROFILE%\.agecs-switcher\auto-submit`). It uses an OS keystroke, so
-it only works when the VS Code window is focused — delete the file to turn it off.
-There is no official "send" API; the Claude URI only pre-fills the box.
+> ¹ The sidebar needs a one-time setup (two settings + reopen VS Code) — see
+> [VS Code sidebar panel](#vs-code-sidebar-panel). The **terminal** mode needs none
+> and is the simplest fully-automatic option.
 
-> **Both tokens and identity:** the panel reads the displayed account from
-> `~/.claude.json` (`oauthAccount`), not only the token file — so switching must
-> move both, or `/status` shows the wrong account. `use`/`activate` do this
-> automatically, but only for accounts saved **with** their identity: run
-> `agecs login <name>` once per account (not just `capture`) so the identity is
-> recorded.
+---
 
-Without the Reloader, the panel needs a manual **full restart** after a switch
-(not *Reload Window*, which resumes the old session). The **terminal** (`agecs run`)
-is switch-and-continue with zero restart, because each launch is a fresh process.
+## Commands
 
-## App (desktop window)
+| Command | What it does |
+|---|---|
+| `agecs run [provider]` | Launch Claude in the terminal; auto-switch + `--continue` on a limit. |
+| `agecs watch [provider]` | For the VS Code **panel**: switch the account on a limit. |
+| `agecs login <name>` | Sign a new account in and save it (also records its email). |
+| `agecs capture <name>` | Save whoever is logged in right now as `<name>`. |
+| `agecs use <name>` | Switch the active account now. |
+| `agecs status [provider]` | List accounts: email · saved · ACTIVE · capped. |
+| `agecs doctor` | Check accounts are saved, **distinct**, and switchable. |
 
-Double-click **`AGECS.cmd`** (or run `npm run app` / `node app.mjs`). It opens a
-real **app window** — its own window, no browser tabs or address bar, own taskbar
-icon — with buttons to log in / save / switch accounts, a health check, and
-**Watch** / **Run** to start switching. Closing the window quits it.
+Pass Claude flags through after `--`:  `node agecs.mjs run claude -- --model opus`
 
-Under the hood it runs a tiny localhost server and shows it in an Edge/Chrome app
-window (no Electron, no dependencies). If neither is installed it falls back to
-your default browser. Also available as the VSCode task **"AGECS: App"**.
+---
 
-```bash
-node app.mjs          # or: npm run app  — opens the app window
-node server.mjs       # plain web version at http://127.0.0.1:4319 (task: "Control panel (web)")
+## How it works
+
+Claude Code stores your login as two plain files — the **tokens** in
+`~/.claude/.credentials.json` and the **account identity** (`oauthAccount`: email,
+`accountUuid`, org) in `~/.claude.json` — and logs every API error, including usage
+limits, to its session transcript as a structured `isApiErrorMessage` event.
+
+```mermaid
+flowchart LR
+    A[You use Claude] --> B{Usage limit hit?}
+    B -- no --> A
+    B -- yes --> C[Detect the structured<br/>limit event in transcript]
+    C --> D[Swap tokens + identity<br/>to the next account]
+    D --> E{Mode}
+    E -- terminal --> F[Relaunch claude --continue<br/>conversation continues]
+    E -- panel --> G[Signal reload →<br/>panel resumes on new account]
 ```
 
-## From VSCode
+1. **Vault** — each account's login snapshot is saved under `~/.agecs-switcher/vault/`.
+2. **Detect** — the watcher tails the live transcript for a *real* limit event (the
+   structured flag, so normal chat mentioning "limit" never triggers it).
+3. **Switch** — it copies the next account's snapshot over the live files, swapping
+   **both** tokens and identity (so two seats in the same org are kept distinct).
+4. **Continue** — terminal relaunches `claude --continue`; the panel reloads so it
+   re-reads the new login.
 
-Copy this repo's `.vscode/tasks.json` into any project (the tasks call the switcher
-by absolute path). Then **Terminal → Run Task → "AGECS: Run (auto-switch)"**.
+---
 
-## Tests
+## VS Code sidebar panel
 
-```bash
-npm test        # node --test  — core logic, vault, server connection, fake-data switch
+The panel caches its login in memory, so swapping files alone won't move a *running*
+chat. The included **AGECS Reloader** companion extension fixes that: the switcher
+signals it on a swap, and it reloads the window so the panel re-reads the new login.
+
+**One-time setup** (done for you by `setup.cmd`, plus two settings):
+
+1. Install the helper — double-click **`install-reloader.cmd`** (or it's part of `setup.cmd`).
+2. Set **`claudeCode.continueAfterReload: true`** in VS Code settings — resumes your
+   conversation after the reload.
+3. Set **`autoContinueAtUsageLimit: true`** in `~/.claude/settings.json` — Claude Code
+   then continues the interrupted task automatically.
+4. Fully **quit and reopen VS Code once** to load the helper and settings.
+
+After that: a limit → `watch` swaps the account → the window reloads → your
+conversation resumes on the new account.
+
+> **Why both tokens and identity?** The panel reads the displayed account from
+> `~/.claude.json` (`oauthAccount`), not just the token file. `use` / `watch` swap
+> both automatically — but only for accounts saved **with** their identity, so run
+> `agecs login <name>` once per account (not just `capture`).
+
+---
+
+## Configuration
+
+`accounts.json` (safe to edit — no secrets):
+
+```jsonc
+{
+  "activeDirs":   { "claude": "~/.claude", "codex": "~/.codex" },
+  "vaultDir":     "~/.agecs-switcher/vault",
+  "transcriptsDir": "~/.claude/projects",
+  "defaultCooldownHours": 5,
+  "providers": {
+    "claude": {
+      "cmd": "claude",
+      "credFile": ".credentials.json",
+      "identityField": "organizationUuid",
+      "continueArgs": ["--continue"],
+      "accounts": ["claude-1", "claude-2"]
+    }
+  },
+  "limitPatterns": ["5-hour limit", "weekly limit", "usage limit", "limit reached", "rate limit"]
+}
 ```
 
-53 tests: limit detection + the full per-poll scan + the live-transcript tailer
-(launch-time filtering, cross-poll uuid dedup, offset tracking, reset-epoch
-parsing incl. past-epoch rejection), 3-account
-exhaustion rotation + cooldown, vault capture/activate round-trip + re-capture +
-corrupted/absent credential files, newest-transcript selection by mtime, the
-server connection, and the full fake-transcript → swap flow — all on fake data.
+Add more account slots by name (`claude-3`, …) and `agecs login` each one. If a future
+Claude Code version changes the limit wording, add the new phrase to `limitPatterns`.
+
+---
+
+## Testing
+
+```bash
+npm test        # node --test
+```
+
+**54 tests, zero dependencies**, all on fake data: limit detection (incl. the
+no-false-switch guard), the per-poll transcript scan (launch-time filter, cross-poll
+dedup, reset-epoch parsing), the live tailer, 3-account rotation + cooldown, vault
+capture/activate round-trip, re-capture, corrupted/missing credential files,
+**same-org two-account** distinction, email recording, duplicate detection, the local
+server connection, and the full fake-transcript → account-swap flow.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `no saved accounts` | Run `agecs login claude-1` (and `claude-2`) first. |
+| `only 1 distinct account` (doctor) | You saved the same login twice — re-`login` the second slot with a *different* account. |
+| Panel still shows the old account | Fully **quit and reopen** VS Code (not *Reload Window*); confirm the two settings above. |
+| `spawn EINVAL` on Windows | Use the provided scripts / `node agecs.mjs …`; they route through `cmd.exe` for you. |
+| Nothing switches | The watcher must be **running** (`watch` / `run`), and a *real* limit must be hit. |
+
+---
 
 ## Caveats
 
-- Rotating accounts to get past usage limits is a **ToS gray area** for Anthropic/
-  OpenAI, even with your own paid accounts. Your call.
-- The switch relaunches Claude (resumes via `--continue`) — a brief blip, not a
-  mid-message hot-swap (no API lets you change account inside a live request).
-- If a future Claude Code version changes the limit wording, add the new snippet
-  to `limitPatterns` in `accounts.json` and run `npm test`.
+- **Terms of service.** Rotating accounts to get past usage limits is a gray area for
+  Anthropic even with your own paid accounts. Use at your own discretion.
+- **One manual step.** Signing each account in once (OAuth) can't be automated — it
+  needs a browser and your credentials. Everything after that is automatic.
+- **Codex / ChatGPT** is wired in config but unverified (the OpenAI Codex CLI wasn't
+  available during development) — confirm its `auth.json` path before relying on it.
+
+---
+
+## License
+
+MIT.
