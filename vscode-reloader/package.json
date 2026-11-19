@@ -1,0 +1,10 @@
+{
+  "name": "agecs-reloader",
+  "displayName": "AGECS Reloader",
+  "description": "Reloads the VS Code window when AGECS Switcher swaps the active Claude account, so the Claude Code panel picks up the new account automatically.",
+  "version": "1.0.0",
+  "publisher": "agecs",
+  "engines": { "vscode": "^1.70.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"]
+}

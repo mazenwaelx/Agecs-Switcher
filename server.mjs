@@ -9,7 +9,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
-import { capture, activate, statusList } from "./lib/vault.mjs";
+import { capture, activate, statusList, accountFingerprint } from "./lib/vault.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CFG = join(HERE, "accounts.json");
@@ -25,7 +25,23 @@ const body = (req) => new Promise((r) => { let b = ""; req.on("data", (d) => (b 
 function state(cfg) {
   const accounts = [];
   for (const provider of Object.keys(cfg.providers)) accounts.push(...statusList(cfg, provider));
-  return { accounts, providers: Object.keys(cfg.providers), defaultProvider: cfg.defaultProvider || "claude" };
+  // Health: flag duplicate logins (same account saved twice) and whether each
+  // provider has >=2 DISTINCT accounts, so the UI can say "switching will work".
+  const fps = {};
+  for (const a of accounts) {
+    if (!a.captured) continue;
+    const fp = accountFingerprint(cfg, a.provider, a.name);
+    (fps[a.provider] ||= new Map());
+    if (fps[a.provider].has(fp)) a.duplicateOf = fps[a.provider].get(fp);
+    else fps[a.provider].set(fp, a.name);
+  }
+  const health = {};
+  for (const provider of Object.keys(cfg.providers)) {
+    const saved = accounts.filter((a) => a.provider === provider && a.captured).length;
+    const distinct = fps[provider] ? fps[provider].size : 0;
+    health[provider] = { saved, distinct, switchable: distinct >= 2 };
+  }
+  return { accounts, providers: Object.keys(cfg.providers), defaultProvider: cfg.defaultProvider || "claude", health };
 }
 
 // Open a real terminal window running an agecs command (login / run need a TTY).
@@ -51,6 +67,7 @@ export function makeServer() {
         const cfg = readCfg();
         if (path === "/api/login") { openTerminal(["login", data.name], "AGECS Login"); return json(res, 200, { ok: true }); }
         if (path === "/api/run") { openTerminal(["run", data.provider || "claude"], "AGECS Auto-Switch"); return json(res, 200, { ok: true }); }
+        if (path === "/api/watch") { openTerminal(["watch", data.provider || "claude"], "AGECS Watch"); return json(res, 200, { ok: true }); }
         if (path === "/api/capture") { capture(cfg, providerOf(cfg, data.name), data.name); return json(res, 200, state(cfg)); }
         if (path === "/api/use") { activate(cfg, providerOf(cfg, data.name), data.name); return json(res, 200, state(cfg)); }
         if (path === "/api/account") {

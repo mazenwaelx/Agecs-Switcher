@@ -45,12 +45,13 @@
 <main>
   <section class="panel">
     <h2>Start</h2>
+    <div id="health" class="note"></div>
     <div class="run">
-      <select id="runProv"></select>
-      <button onclick="startRun()">▶ Start auto-switcher</button>
-      <span class="note">Opens a terminal running the switcher. Use Claude there as normal — it swaps accounts on a limit.</span>
+      <select id="runProv" onchange="renderHealth()"></select>
+      <button onclick="startWatch()">🛡 Watch (extension panel)</button>
+      <button class="ghost" onclick="startRun()">▶ Run in terminal (fully auto)</button>
     </div>
-    <p class="note">Or run it yourself: <code>node agecs.mjs run claude</code></p>
+    <p class="note"><b>Watch</b> — keep using the Claude Code <b>sidebar panel</b>; on a limit it swaps the account, then you re-send your message. <b>Run</b> — launches Claude in a terminal and relaunches it automatically on a limit.</p>
   </section>
 
   <section class="panel">
@@ -74,11 +75,14 @@ async function load() {
   S = await (await fetch("/api/state")).json();
   const opts = S.providers.map(p => `<option value="${p}">${provLabel(p)}</option>`).join("");
   $("runProv").innerHTML = opts; $("newProv").innerHTML = opts; $("runProv").value = S.defaultProvider;
+  renderHealth();
   $("accounts").innerHTML = S.accounts.map(a => `
     <div class="acct">
-      <span class="name">${a.name}</span> <span class="prov">${a.provider}</span>
+      <span class="name">${a.name}</span>
+      <span class="prov">${a.email ? a.email : a.provider}</span>
       ${a.active ? '<span class="badge active">ACTIVE</span>' : ''}
       <span class="badge ${a.captured ? 'saved' : 'unsaved'}">${a.captured ? 'saved' : 'not saved'}</span>
+      ${a.duplicateOf ? `<span class="badge unsaved">same login as ${a.duplicateOf}</span>` : ''}
       ${a.coolingUntil ? `<span class="badge">capped</span>` : ''}
       <span class="spacer"></span>
       <button class="ghost" onclick="login('${a.name}')">Log in</button>
@@ -93,7 +97,15 @@ async function post(path, data) {
 }
 const login = (name) => post("/api/login", { name }).then(() => alert("A terminal opened. Type /login there, sign in, then close it and click Refresh."));
 async function act(action, name) { const r = await post("/api/" + action, { name }); if (r.error) return alert(r.error); load(); }
+function renderHealth() {
+  const h = S.health && S.health[$("runProv").value];
+  if (!h) { $("health").innerHTML = ""; return; }
+  $("health").innerHTML = h.switchable
+    ? `<span style="color:#3fb950">✓ ${h.distinct} distinct accounts saved — switching will work.</span>`
+    : `<span style="color:#d29922">⚠ only ${h.distinct} distinct account saved — save a <b>different</b> account below to enable switching.</span>`;
+}
 async function startRun() { await post("/api/run", { provider: $("runProv").value }); alert("Auto-switcher terminal opened. Work in it as usual."); }
+async function startWatch() { await post("/api/watch", { provider: $("runProv").value }); alert("Watcher terminal opened. Use the Claude Code sidebar panel as normal — after a switch, just re-send your message."); }
 async function addAccount() { const name = $("newName").value.trim(); if (!name) return; await post("/api/account", { action:"add", name, provider:$("newProv").value }); $("newName").value=""; load(); }
 async function removeAccount(name, provider) { if (!confirm("Remove slot " + name + "?")) return; await post("/api/account", { action:"remove", name, provider }); load(); }
 load();

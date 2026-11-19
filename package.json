@@ -6,6 +6,7 @@
   "bin": { "agecs": "agecs.mjs" },
   "scripts": {
     "test": "node --test",
+    "app": "node app.mjs",
     "start": "node server.mjs",
     "agecs": "node agecs.mjs"
   },

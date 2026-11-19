@@ -3,10 +3,20 @@
   "tasks": [
     {
       "label": "AGECS: Run (auto-switch accounts)",
-      "detail": "Launch Claude and auto-switch accounts when a limit hits",
+      "detail": "Launch Claude in the terminal and auto-switch accounts when a limit hits",
       "type": "shell",
       "command": "node",
-      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "run", "claude"],
+      "args": ["${workspaceFolder}/agecs.mjs", "run", "claude"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Watch (extension panel)",
+      "detail": "Use the Claude Code SIDEBAR panel; auto-switches the account on a limit",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/agecs.mjs", "watch", "claude"],
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "panel": "dedicated" },
       "problemMatcher": []
@@ -15,7 +25,8 @@
       "label": "AGECS: Log in an account",
       "type": "shell",
       "command": "node",
-      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "login", "${input:accountName}"],
+      "args": ["${workspaceFolder}/agecs.mjs", "login", "${input:accountName}"],
+      "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "panel": "dedicated" },
       "problemMatcher": []
     },
@@ -23,14 +34,34 @@
       "label": "AGECS: Status",
       "type": "shell",
       "command": "node",
-      "args": ["d:/AGECS/Agecs-Switcher/agecs.mjs", "status"],
+      "args": ["${workspaceFolder}/agecs.mjs", "status"],
+      "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     },
     {
-      "label": "AGECS: Control panel",
+      "label": "AGECS: Doctor (check accounts)",
       "type": "shell",
       "command": "node",
-      "args": ["d:/AGECS/Agecs-Switcher/server.mjs"],
+      "args": ["${workspaceFolder}/agecs.mjs", "doctor"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: App",
+      "detail": "Open the AGECS Switcher as a desktop app window",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/app.mjs"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "AGECS: Control panel (web)",
+      "type": "shell",
+      "command": "node",
+      "args": ["${workspaceFolder}/server.mjs"],
+      "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "reveal": "always", "panel": "dedicated" },
       "problemMatcher": []
     },
@@ -39,7 +70,7 @@
       "type": "shell",
       "command": "node",
       "args": ["--test"],
-      "options": { "cwd": "d:/AGECS/Agecs-Switcher" },
+      "options": { "cwd": "${workspaceFolder}" },
       "problemMatcher": []
     }
   ],

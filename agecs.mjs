@@ -11,11 +11,12 @@
 //   agecs status [provider]             show accounts + which is active
 
 import { spawn } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { isLimitEvent, pickNextAccount, earliestReset } from "./lib/core.mjs";
-import { capture, activate, whichActive, statusList, isCaptured, newestTranscript } from "./lib/vault.mjs";
+import { homedir } from "node:os";
+import { pickNextAccount, earliestReset } from "./lib/core.mjs";
+import { capture, activate, whichActive, statusList, isCaptured, makeLimitTailer, accountFingerprint, recordAccountInfo } from "./lib/vault.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(HERE, "accounts.json"), "utf8"));
@@ -30,7 +31,23 @@ function providerOf(name) {
   for (const [pn, p] of Object.entries(cfg.providers)) if (p.accounts.includes(name)) return pn;
   return cfg.defaultProvider || "claude";
 }
-const exe = (cmd) => (isWin && !cmd.includes(".") ? `${cmd}.cmd` : cmd);
+// Windows can't spawn a .cmd directly (EINVAL) and shell:true triggers a DEP0190
+// warning on every launch; route through cmd.exe /c so interactive stdio still
+// inherits the console (the Claude TUI needs a real terminal).
+function spawnCli(cmd, args) {
+  const opts = { stdio: "inherit", cwd: process.cwd() };
+  return isWin ? spawn(process.env.ComSpec || "cmd.exe", ["/c", cmd, ...args], opts) : spawn(cmd, args, opts);
+}
+
+// Tell the AGECS Reloader VS Code extension (if installed) to reload the window so
+// the Claude Code PANEL re-reads the just-swapped account. No-op if it isn't installed.
+function signalReload() {
+  try {
+    const dir = join(homedir(), ".agecs-switcher");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "reload.signal"), String(Date.now()));
+  } catch { /* best effort */ }
+}
 
 // --- commands --------------------------------------------------------------
 function cmdStatus(provider = "claude") {
@@ -38,9 +55,31 @@ function cmdStatus(provider = "claude") {
   for (const a of statusList(cfg, provider)) {
     const flags = [a.active ? `${C.green}ACTIVE${C.reset}` : "", a.captured ? "saved" : `${C.red}not saved${C.reset}`,
       a.coolingUntil ? `${C.yellow}capped-> ${fmt(a.coolingUntil)}${C.reset}` : ""].filter(Boolean).join("  ");
-    console.log(`  - ${a.name}  ${flags}`);
+    console.log(`  - ${a.name}  ${a.email ? `${a.email}  ` : ""}${flags}`);
   }
 }
+// Health check: are accounts saved, distinct, and is there something to switch to?
+// Distinctness is by full-credential fingerprint, so two seats in the SAME org
+// count as distinct (different logins) — only the same login saved twice is flagged.
+function cmdDoctor() {
+  let problems = 0;
+  for (const [provider, p] of Object.entries(cfg.providers)) {
+    const saved = p.accounts.filter((n) => isCaptured(cfg, provider, n));
+    say(`${provider}: ${saved.length}/${p.accounts.length} saved, active: ${whichActive(cfg, provider) || "(none/unknown)"}`);
+    const byFp = new Map();
+    for (const n of saved) {
+      const fp = accountFingerprint(cfg, provider, n);
+      if (byFp.has(fp)) { warn(`  ! "${n}" is the SAME login as "${byFp.get(fp)}" — re-login "${n}" with a different account.`); problems++; }
+      else byFp.set(fp, n);
+    }
+    const distinct = byFp.size;
+    if (saved.length === 0) console.log(`  (not set up — skip if you don't use ${provider})`);
+    else if (distinct < 2) { warn(`  ! only ${distinct} distinct account — nothing to switch to when it caps. Save another.`); problems++; }
+    else console.log(`  ${C.green}${distinct} distinct accounts — switching will work.${C.reset}`);
+  }
+  say(problems ? `${C.red}${problems} problem(s).${C.reset}` : `${C.green}all good.${C.reset}`);
+}
+
 function cmdCapture(name) {
   const provider = providerOf(name);
   capture(cfg, provider, name);
@@ -49,14 +88,21 @@ function cmdCapture(name) {
 function cmdUse(name) {
   const provider = providerOf(name);
   activate(cfg, provider, name);
-  say(`switched active ${provider} account to "${name}". Applies on next Claude launch.`);
+  signalReload();
+  say(`switched active ${provider} account to "${name}". Terminal: next launch. Panel: reloads if AGECS Reloader is installed.`);
 }
 function cmdLogin(name) {
   const provider = providerOf(name);
   const p = cfg.providers[provider];
   say(`opening ${p.cmd} — type /login and sign in as "${name}", then exit.`);
-  const child = spawn(exe(p.cmd), [], { stdio: "inherit", cwd: process.cwd() });
-  child.on("close", () => { try { cmdCapture(name); } catch (e) { warn(e.message); } });
+  const child = spawnCli(p.cmd, []);
+  child.on("close", () => {
+    try {
+      cmdCapture(name);
+      const email = recordAccountInfo(cfg, provider, name);
+      if (email) say(`recorded "${name}" = ${C.green}${email}${C.reset}`);
+    } catch (e) { warn(e.message); }
+  });
 }
 
 async function cmdRun(provider, passthrough) {
@@ -93,6 +139,45 @@ async function cmdRun(provider, passthrough) {
   }
 }
 
+// For the VS Code Claude Code PANEL (and any Claude you run yourself): we don't own
+// that process, so we can't relaunch it. Instead we watch the transcript and the
+// moment a real limit hits, swap the active login to the next account — then you
+// just re-send your message / press Continue in the panel and it's on the new one.
+async function cmdWatch(provider) {
+  provider = provider || cfg.defaultProvider || "claude";
+  const p = cfg.providers[provider];
+  if (!p) { warn(`unknown provider "${provider}"`); process.exit(2); }
+  const cooldownMs = (cfg.defaultCooldownHours || 5) * 3600 * 1000;
+  const cooldownUntil = {};
+  const saved = () => p.accounts.filter((n) => isCaptured(cfg, provider, n));
+
+  let active = whichActive(cfg, provider);
+  if (!active) {
+    const first = saved()[0];
+    if (!first) { warn(`no saved ${provider} accounts. Run:  node agecs.mjs login ${p.accounts[0] || "claude-1"}`); process.exit(2); }
+    activate(cfg, provider, first); active = first;
+    say(`no account was active — activated "${first}".`);
+  }
+  say(`watching ${provider} (active: ${C.green}${active}${C.reset}). Use the Claude Code panel as normal.`);
+  say(`on a limit I'll switch the account — then re-send your message / press Continue in the panel.`);
+
+  const tail = makeLimitTailer(cfg, Date.now());
+  while (true) {
+    await sleep(cfg.pollMs || 1500);
+    const live = whichActive(cfg, provider);           // follow a manual switch too
+    if (live && live !== active) active = live;
+    let hit; try { hit = tail(); } catch { continue; }
+    if (!hit) continue;
+    cooldownUntil[active] = hit.resetEpochMs || Date.now() + cooldownMs;
+    warn(`${active} hit a usage limit. Cooling until ${fmt(cooldownUntil[active])}. Switching...`);
+    const next = pickNextAccount({ accounts: saved(), activeName: active, cooldownUntil, now: Date.now() });
+    if (!next) { await waitForReset(cooldownUntil); continue; }
+    activate(cfg, provider, next); active = next;
+    signalReload();
+    say(`${C.green}switched to ${next}${C.reset}. Panel reloads automatically (AGECS Reloader); terminal picks it up on next launch.`);
+  }
+}
+
 async function waitForReset(cooldownUntil) {
   const next = earliestReset(cooldownUntil);
   const waitMs = Math.max(next - Date.now(), 60_000);
@@ -106,35 +191,19 @@ function launchUntilLimitOrExit(provider, active, passthrough, firstLaunch, cool
   const p = cfg.providers[provider];
   const args = firstLaunch ? [...passthrough] : [...p.continueArgs, ...passthrough];
   const launchTs = Date.now();
-  const child = spawn(exe(p.cmd), args, { stdio: "inherit", cwd: process.cwd() });
+  const child = spawnCli(p.cmd, args);
+  const tail = makeLimitTailer(cfg, launchTs);
 
   return new Promise((resolve) => {
     let done = false, limitHit = false;
-    const seen = new Set();
-    let watchFile = null, offset = 0;
 
     const poll = setInterval(() => {
       try {
-        const f = newestTranscript(cfg, launchTs - 60_000);
-        if (!f) return;
-        if (f !== watchFile) { watchFile = f; offset = 0; }
-        const size = statSync(f).size;
-        if (size <= offset) return;
-        const chunk = readFileSync(f, "utf8").slice(offset);
-        offset = size;
-        for (const line of chunk.split(/\r?\n/)) {
-          if (!line.trim()) continue;
-          let o; try { o = JSON.parse(line); } catch { continue; }
-          const ts = Date.parse(o.timestamp || 0) || 0;
-          if (ts && ts < launchTs) continue;
-          if (o.uuid && seen.has(o.uuid)) continue;
-          if (o.uuid) seen.add(o.uuid);
-          if (isLimitEvent(o, cfg.limitPatterns)) {
-            cooldownUntil[active] = detectReset(o) || Date.now() + cooldownMs;
-            limitHit = true;
-            killTree(child);
-            return;
-          }
+        const hit = tail();
+        if (hit) {
+          cooldownUntil[active] = hit.resetEpochMs || Date.now() + cooldownMs;
+          limitHit = true;
+          killTree(child);
         }
       } catch { /* transient fs race — ignore */ }
     }, cfg.pollMs || 1500);
@@ -147,12 +216,6 @@ function launchUntilLimitOrExit(provider, active, passthrough, firstLaunch, cool
   });
 }
 
-function detectReset(o) {
-  const t = JSON.stringify(o).match(/(\d{10})/);
-  if (!t) return null;
-  const ms = Number(t[1]) * 1000;
-  return ms > Date.now() ? ms : null;
-}
 function killTree(child) {
   try { if (isWin) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"]); else child.kill("SIGTERM"); } catch { /* gone */ }
 }
@@ -166,9 +229,11 @@ const requireName = (n) => { if (!n) { warn("needs an account name, e.g. claude-
 
 try {
   if (cmd === "status") cmdStatus(positional[0]);
+  else if (cmd === "doctor") cmdDoctor();
   else if (cmd === "capture") requireName(positional[0]) && cmdCapture(positional[0]);
   else if (cmd === "use") requireName(positional[0]) && cmdUse(positional[0]);
   else if (cmd === "login") requireName(positional[0]) && cmdLogin(positional[0]);
+  else if (cmd === "watch") cmdWatch(positional[0]);
   else if (cmd === "run" || cmd === undefined) cmdRun(positional[0], passthrough);
-  else { console.log("commands: run | login <name> | capture <name> | use <name> | status [provider]"); process.exit(1); }
+  else { console.log("commands: run | watch [provider] | login <name> | capture <name> | use <name> | status [provider] | doctor"); process.exit(1); }
 } catch (e) { warn(e.message); process.exit(1); }
